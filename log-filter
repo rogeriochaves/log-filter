@@ -1,0 +1,34 @@
+#!/usr/bin/env perl
+
+use Time::HiRes;
+
+
+sub main {
+	my $last = 0;
+	while (<>) {
+		my $now = Time::HiRes::time();
+		if ($now - $last < 1) {
+			print $_;
+		} else {
+			print "got: ", $_;
+		}
+		$last = $now;
+	}
+}
+
+
+sub split_words {
+	my $log = shift;
+
+
+	sub split_line {
+		my $line = shift;
+		[ grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $_ ];
+	}
+
+	my @logs = map { split_line $_ } split /----+/, $log;
+
+	return @logs;
+}
+
+main() unless caller;
