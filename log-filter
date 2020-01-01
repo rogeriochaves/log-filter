@@ -1,5 +1,10 @@
 #!/usr/bin/env perl
 
+use strict;
+use warnings;
+use POSIX qw(strftime);
+use List::Util qw(sum);
+
 no warnings 'experimental::smartmatch';
 
 my $log = "";
@@ -38,12 +43,25 @@ sub main {
 sub process_log {
 	my @lines = split_lines($log);
 	my @filtered_words = split ",", ($args{'--words'} || '');
+
+	my $today = strftime "%Y-%m-%d", localtime;
+
+	my $filename = $ENV{"HOME"} . '/.log-filter-history';
+	open(my $fh, '>>', $filename) or die "Could not open file '$filename' $!";
+
 	@lines = grep {
 		my @words = split_words($_);
 		my @matching_words = grep { $_ ~~ @words } @filtered_words;
-		not scalar @matching_words;
+		my $included = not scalar @matching_words;
+
+		print $fh "$today:", join(",", @words), "\n";
+
+		$included;
 	} @lines;
-	print join "--------------------------------------------------------------------------------", @lines;
+	close $fh;
+
+	my $separator = "--------------------------------------------------------------------------------";
+	print join $separator, @lines;
 }
 
 
@@ -58,6 +76,41 @@ sub split_words {
 	my $log = shift;
 
 	return grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $log;
+}
+
+sub parse_history {
+	my $history = {};
+	if (open(my $fh, '<:encoding(UTF-8)', $ENV{"HOME"} . '/.log-filter-history')) {
+		while (my $row = <$fh>) {
+			chomp $row;
+			my ($date, $wordlist) = split ":", $row;
+			my @words = split ",", $wordlist;
+			$history->{$date}{$_}++ for @words;
+		}
+	}
+	return $history;
+}
+
+sub posteriors {
+	my ($word, $history) = @_;
+
+	my $totals = {};
+	for my $date (keys %$history) {
+		$totals->{$date} = sum values %{$history->{$date}};
+		$totals->{$word} += $history->{$date}{$word} || 0;
+	};
+	my $total_words = sum values %$totals;
+
+	my $posteriors = {};
+	for my $date (keys %$history) {
+		my $P_foo_given_date = $history->{$date}{$word} / $totals->{$date};
+		my $P_date = $totals->{$date} / $total_words;
+		my $P_word = $totals->{$word} / $total_words;
+
+		$posteriors->{$date} = ($P_foo_given_date * $P_date) / $P_word;
+	};
+
+	return $posteriors;
 }
 
 main() unless caller;
