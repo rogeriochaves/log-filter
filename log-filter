@@ -1,34 +1,63 @@
 #!/usr/bin/env perl
 
-use Time::HiRes;
+no warnings 'experimental::smartmatch';
+
+my $log = "";
+my %args = @ARGV;
+
+if (exists $args{'--help'}) {
+	print("
+Filters logs from stdin, for example:
+
+  tail -f mylog.log | log-filter --words spam,warning,fish
+
+Usage: log-filter [args]
+  --words   comma separated list of words, any output in less then 1s containing this word will be filtered out
+  --help    shows this help
+
+"
+	);
+	exit();
+}
 
 
 sub main {
-	my $last = 0;
-	while (<>) {
-		my $now = Time::HiRes::time();
-		if ($now - $last < 1) {
-			print $_;
-		} else {
-			print "got: ", $_;
-		}
-		$last = $now;
+	local $SIG{ALRM} = sub {
+		process_log();
+		$log = "";
+		main();
+	};
+	while (my $line = <STDIN>) {
+		$log .= $line;
+		alarm(1);
 	}
+	process_log();
+}
+
+
+sub process_log {
+	my @lines = split_lines($log);
+	my @filtered_words = split ",", ($args{'--words'} || '');
+	@lines = grep {
+		my @words = split_words($_);
+		my @matching_words = grep { $_ ~~ @words } @filtered_words;
+		not scalar @matching_words;
+	} @lines;
+	print join "--------------------------------------------------------------------------------", @lines;
+}
+
+
+sub split_lines {
+	my $log = shift;
+
+	return split /----+/, $log;
 }
 
 
 sub split_words {
 	my $log = shift;
 
-
-	sub split_line {
-		my $line = shift;
-		[ grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $_ ];
-	}
-
-	my @logs = map { split_line $_ } split /----+/, $log;
-
-	return @logs;
+	return grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $log;
 }
 
 main() unless caller;

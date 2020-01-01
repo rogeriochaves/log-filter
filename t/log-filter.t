@@ -3,15 +3,32 @@ use Test::Differences;
 require "log-filter";
 
 describe "log-filter" => sub {
-	it "break down logs and split words" => sub {
+	it "splits log lines" => sub {
 		my $sample = "
 word_a word_b
 word_c word_d
 -------------
 word_e word_f
     ";
+		my $result = [ split_lines($sample) ];
+		my $expected = ["
+word_a word_b
+word_c word_d
+", "
+word_e word_f
+    "
+		];
+
+		eq_or_diff($result, $expected);
+	};
+
+	it "break down logs and split words" => sub {
+		my $sample = "
+word_a word_b
+word_c word_d
+    ";
 		my $result = [ split_words($sample) ];
-		my $expected = [["word_a", "word_b", "word_c", "word_d"],["word_e", "word_f"]];
+		my $expected = ["word_a", "word_b", "word_c", "word_d"];
 
 		eq_or_diff($result, $expected);
 	};
@@ -28,9 +45,19 @@ word_e word_f
     ";
 
 		my $result = [ split_words($sample) ];
-		my $expected = [['Tue','Dec','warn','NOT-EVENT-LOGGED','cbdeb','extranet','reservations','retrieve_list','Request','POST','fresa','extranet','reservations','retrieve_listperpagepagehotel_idlangxudate_typearrivaldate_from--date_to--sesfeecfdafedddctokenempty-tokenuser_triggered_search','HTTP','intercom','find_thread','failed','Error','from','Intercom','Internal','Server','Error','reservation_ids','at','usr','local','git_tree','main','lib','Foo','Intercom','PerlAPI','Threadpm','line','Deployment','extranet--_fake','babcceadddfabba','Foo','Intercom','PerlAPI','Thread','__ANON__STR','called','at','usr','lib','pakket','libraries','active','lib','perl','x_-linux','AnyEvent','XSPromises','Loaderpm','line']];
+		my $expected = ['Tue','Dec','warn','NOT-EVENT-LOGGED','cbdeb','extranet','reservations','retrieve_list','Request','POST','fresa','extranet','reservations','retrieve_listperpagepagehotel_idlangxudate_typearrivaldate_from--date_to--sesfeecfdafedddctokenempty-tokenuser_triggered_search','HTTP','intercom','find_thread','failed','Error','from','Intercom','Internal','Server','Error','reservation_ids','at','usr','local','git_tree','main','lib','Foo','Intercom','PerlAPI','Threadpm','line','Deployment','extranet--_fake','babcceadddfabba','Foo','Intercom','PerlAPI','Thread','__ANON__STR','called','at','usr','lib','pakket','libraries','active','lib','perl','x_-linux','AnyEvent','XSPromises','Loaderpm','line'];
 
 		eq_or_diff($result, $expected);
+	};
+
+	it "filters logs with specific words" => sub {
+		my $result = `echo "foo bar\n-------\nbaz\nqux\n-------\nalpha beta" | ./log-filter --words foo,baz`;
+		eq_or_diff($result, "\nalpha beta\n");
+	};
+
+	it "filters logs with specific words generated over time" => sub {
+		my $result = `perl producer.pl | ./log-filter --words hey,ho`;
+		eq_or_diff($result, "let's go\n");
 	};
 };
 
