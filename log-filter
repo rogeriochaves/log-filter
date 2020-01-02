@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use POSIX qw(strftime);
-use List::Util qw(sum);
+use List::Util qw(sum product);
 
 no warnings 'experimental::smartmatch';
 
@@ -78,6 +78,7 @@ sub split_words {
 	return grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $log;
 }
 
+
 sub parse_history {
 	my $history = {};
 	if (open(my $fh, '<:encoding(UTF-8)', $ENV{"HOME"} . '/.log-filter-history')) {
@@ -91,26 +92,74 @@ sub parse_history {
 	return $history;
 }
 
-sub posteriors {
-	my ($word, $history) = @_;
+
+sub calculate_totals {
+	my ($words, $history) = @_;
 
 	my $totals = {};
 	for my $date (keys %$history) {
-		$totals->{$date} = sum values %{$history->{$date}};
-		$totals->{$word} += $history->{$date}{$word} || 0;
-	};
-	my $total_words = sum values %$totals;
+		$totals->{dates}{$date} = sum values %{$history->{$date}};
+		$totals->{words}{$_} += $history->{$date}{$_} || 0 for @$words;
+	}
+
+	return $totals;
+}
+
+
+sub word_posteriors {
+	my ($word, $history, $totals) = @_;
+
+	my $total_words = sum values %{$totals->{dates}};
 
 	my $posteriors = {};
 	for my $date (keys %$history) {
-		my $P_foo_given_date = $history->{$date}{$word} / $totals->{$date};
-		my $P_date = $totals->{$date} / $total_words;
-		my $P_word = $totals->{$word} / $total_words;
+		if ($totals->{words}{$word} < 1) {
+			$posteriors->{$date} = 0.1;
+			next;
+		}
+		my $P_foo_given_date = $history->{$date}{$word} / $totals->{dates}{$date};
+		my $P_date = $totals->{dates}{$date} / $total_words;
+		my $P_word = $totals->{words}{$word} / $total_words;
 
 		$posteriors->{$date} = ($P_foo_given_date * $P_date) / $P_word;
-	};
+	}
 
 	return $posteriors;
+}
+
+
+sub posteriors {
+	my ($words, $history) = @_;
+
+	my $totals = calculate_totals($words, $history);
+
+	my $posteriors = {};
+	for my $word (@$words) {
+		my $word_posterior = word_posteriors($word, $history, $totals);
+		$posteriors->{$_}{$word} = $word_posterior->{$_} for keys %{$word_posterior};
+	}
+
+	return $posteriors;
+}
+
+# References:
+# This is implementented according to the formula on http://www.paulgraham.com/spam.html
+# Although it might not be the most correct Bayes way, we accept his assumptions,
+# the difference is explained on https://cs.wellesley.edu/~anderson/writing/naive-bayes.pdf
+sub combined_probability {
+	my ($posteriors, $n) = @_;
+
+	my $combined_probabilities = {};
+	for my $date (keys %{$posteriors}) {
+		my $posteriors_for_date = $posteriors->{$date};
+
+		my @relevant_probs = sort {abs($b - 0.5) <=> abs($a - 0.5)} values %{$posteriors_for_date};
+		@relevant_probs = @relevant_probs[0..$n - 1];
+
+		my $combined_probability = (product @relevant_probs) / ((product @relevant_probs) + (product map { 1 - $_ } @relevant_probs));
+		$combined_probabilities->{$date} = $combined_probability;
+	}
+	return $combined_probabilities;
 }
 
 main() unless caller;

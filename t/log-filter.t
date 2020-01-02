@@ -81,21 +81,24 @@ word_c word_d
 		write_file($ENV{"HOME"} . '/.log-filter-history', $history);
 		my $result = parse_history();
 
-		eq_or_diff($result, {
-			'2020-01-01' => {
-				'foo' => 2,
-				'bar' => 2,
-				'baz' => 1,
-			},
-			'2020-01-02' => {
-				'foo' => 2,
-				'bar' => 1,
-				'baz' => 2,
-			},
-		});
+		eq_or_diff(
+			$result,
+			{
+				'2020-01-01' => {
+					'foo' => 2,
+					'bar' => 2,
+					'baz' => 1,
+				},
+				'2020-01-02' => {
+					'foo' => 2,
+					'bar' => 1,
+					'baz' => 2,
+				},
+			}
+		);
 	};
 
-	it "calculates probability of a word to be in each date given history" => sub {
+	describe "bayesian calculations" => sub {
 		my $history = {
 			'2020-01-01' => {
 				'foo' => 3,
@@ -108,16 +111,71 @@ word_c word_d
 				'baz' => 2,
 			},
 		};
-		my $result = posteriors("foo", $history);
-		my $expected = {
-			# P(2020-01-01|foo) = [ P(foo|2020-01-01) * P(2020-01-01) ] / P(foo)
-			# P(2020-01-01|foo) = [ 0.5 * 0.6 ] / 0.4
-			# P(2020-01-01|foo) = 0.75
-			'2020-01-01' => 0.75,
-			'2020-01-02' => 0.25,
+
+		it "calculates probability of a word to be in each date given history" => sub {
+			my $result = word_posteriors('foo', $history, calculate_totals(['foo'], $history));
+			my $expected = {
+
+				# P(2020-01-01|foo) = [ P(foo|2020-01-01) * P(2020-01-01) ] / P(foo)
+				# P(2020-01-01|foo) = [ 0.5 * 0.6 ] / 0.4
+				# P(2020-01-01|foo) = 0.75
+				'2020-01-01' => 0.75,
+				'2020-01-02' => 0.25,
+			};
+			eq_or_diff($result, $expected);
 		};
-		eq_or_diff($result, $expected);
+
+		it "calculates probability of unseen word" => sub {
+			my $result = word_posteriors('xpto', $history, calculate_totals(['xpto'], $history));
+			my $expected = {
+				'2020-01-01' => 0.1,
+				'2020-01-02' => 0.1,
+			};
+			eq_or_diff($result, $expected);
+		};
+
+		it "calculates probability of all words" => sub {
+			my $result = posteriors(['foo', 'bar'], $history);
+			my $expected = {
+				'2020-01-01' => {
+					'foo' => 0.75,
+					'bar' => 2 / 3,
+				},
+				'2020-01-02' => {
+					'foo' => 0.25,
+					'bar' => 1 / 3,
+				},
+			};
+			eq_or_diff($result, $expected);
+		};
+
+		it "selects n most relevant words and calculate their combined probabilities according to Graham" => sub {
+			my $posteriors = {
+				'2020-01-01' => {
+					'foo' => 0.95,
+					'bar' => 0.85,
+					'baz' => 0.06,
+				},
+				'2020-01-02' => {
+					'foo' => 0.65,
+					'bar' => 0.85,
+					'baz' => 0.05,
+				},
+			};
+			my $n = 2;
+			my $result = combined_probability($posteriors, $n);
+			my $expected = {
+
+				# (P(foo) * P(baz)) / [ (P(foo) * P(baz)) + ((1 - P(foo)) * (1 - P(baz))) ]
+				# (0.95 * 0.06) / [ (0.95 * 0.06) + (0.05 * 0.94) ]
+				# 0.548076923
+				'2020-01-01' => 0.548076923076923,
+				'2020-01-02' => 0.22972972972973,
+			};
+			eq_or_diff($result, $expected);
+		};
 	};
+
 };
 
 runtests();
