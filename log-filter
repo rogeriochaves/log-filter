@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use POSIX qw(strftime);
-use List::Util qw(sum product min);
+use List::Util qw(sum product min max);
 
 no warnings 'experimental::smartmatch';
 
@@ -30,9 +30,11 @@ my $window = $args{'--window'} || 1;
 my $history = parse_history();
 
 my $hyperparameters = {
-	num_relevant_words => 5,
-	new_word_prob => 0,
+	num_relevant_words => 10,
+	new_word_prob => 0.5,
 	threshold => 0.5,
+	upper_bound => 0.99,
+	lower_bound => 0.01,
 };
 
 
@@ -61,12 +63,14 @@ sub process_log {
 
 	@lines = grep {
 		my @words = split_words($_);
-		my @matching_words = grep { $_ ~~ @words } @filtered_words;
-		$history->{$today}{$_}++ for @words;
-		my $included = (not scalar @matching_words) && bayesian_filter(\@words);
+		my $included = 0;
+		if (@words) {
+			my @matching_words = grep { $_ ~~ @words } @filtered_words;
+			$history->{$today}{$_}++ for @words;
+			$included = (not scalar @matching_words) && bayesian_filter(\@words);
 
-		print $fh "$today:", join(",", @words), "\n";
-
+			print $fh "$today:", join(",", @words), "\n";
+		}
 		$included;
 	} @lines;
 	close $fh;
@@ -79,7 +83,7 @@ sub process_log {
 sub split_lines {
 	my $log = shift;
 
-	return split /----+/, $log;
+	return split /----+|==>.*?<==/, $log;
 }
 
 
@@ -124,15 +128,16 @@ sub word_posteriors {
 
 	my $posteriors = {};
 	for my $date (keys %$history) {
-		if ($totals->{words}{$word} < 1 || not exists $history->{$date}{$word} ) { # TODO test second case after ||
+		if ($totals->{words}{$word} < 1 || not exists $history->{$date}{$word} ) {
 			$posteriors->{$date} = $hyperparameters->{new_word_prob};
 			next;
 		}
-		my $P_foo_given_date = $history->{$date}{$word} / $totals->{dates}{$date};
+		my $P_date_given_word = $history->{$date}{$word} / $totals->{dates}{$date};
 		my $P_date = $totals->{dates}{$date} / $total_words;
 		my $P_word = $totals->{words}{$word} / $total_words;
+		my $prob = ($P_date_given_word * $P_date) / $P_word;
 
-		$posteriors->{$date} = ($P_foo_given_date * $P_date) / $P_word;
+		$posteriors->{$date} = max($hyperparameters->{lower_bound}, min($hyperparameters->{upper_bound}, $prob));
 	}
 
 	return $posteriors;

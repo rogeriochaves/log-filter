@@ -12,6 +12,8 @@ describe "log-filter" => sub {
 	word_c word_d
 	-------------
 	word_e word_f
+	==> /file <==
+	word_g
 			";
 			my $result = [ split_lines($sample) ];
 			my $expected = ["
@@ -19,6 +21,9 @@ describe "log-filter" => sub {
 	word_c word_d
 	", "
 	word_e word_f
+	",
+			"
+	word_g
 			"
 			];
 
@@ -110,7 +115,7 @@ describe "log-filter" => sub {
 			'2020-01-02' => {
 				'foo' => 1,
 				'bar' => 1,
-				'baz' => 2,
+				'qux' => 2,
 			},
 		};
 
@@ -130,8 +135,17 @@ describe "log-filter" => sub {
 		it "calculates probability of unseen word" => sub {
 			my $result = word_posteriors('xpto', $history, calculate_totals(['xpto'], $history));
 			my $expected = {
-				'2020-01-01' => 0,
-				'2020-01-02' => 0,
+				'2020-01-01' => 0.5,
+				'2020-01-02' => 0.5,
+			};
+			eq_or_diff($result, $expected);
+		};
+
+		it "calculates probability of words not available in all dates, with maximum probability to avoid multiplication by 0 errors" => sub {
+			my $result = word_posteriors('qux', $history, calculate_totals(['qux'], $history));
+			my $expected = {
+				'2020-01-01' => 0.5,
+				'2020-01-02' => 0.99,
 			};
 			eq_or_diff($result, $expected);
 		};
