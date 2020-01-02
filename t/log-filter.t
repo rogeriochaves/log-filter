@@ -53,12 +53,12 @@ word_c word_d
 	};
 
 	it "filters logs with specific words" => sub {
-		my $result = `echo "foo bar\n-------\nbaz\nqux\n-------\nalpha beta" | ./log-filter --words foo,baz`;
+		my $result = `echo "foo bar\n-------\nbaz\nqux\n-------\nalpha beta" | ./log-filter --block foo,baz`;
 		eq_or_diff($result, "\nalpha beta\n");
 	};
 
 	xit "filters logs with specific words generated over time" => sub {
-		my $result = `perl producer.pl | ./log-filter --words hey,ho`;
+		my $result = `perl producer.pl | ./log-filter --block hey,ho`;
 		eq_or_diff($result, "let's go\n");
 	};
 

@@ -14,16 +14,19 @@ if (exists $args{'--help'}) {
 	print("
 Filters logs from stdin, for example:
 
-  tail -f mylog.log | log-filter --words spam,warning,fish
+  tail -f mylog.log | log-filter --block spam,warning,fish
 
 Usage: log-filter [args]
-  --words   comma separated list of words, any output in less then 1s containing this word will be filtered out
+  --block   comma separated list of words, any output in less then 1s containing this word will be filtered out
+  --window  window time in seconds to group logs, by default it's 1s
   --help    shows this help
 
 "
 	);
 	exit();
 }
+
+my $window = $args{'--window'} || 1;
 
 
 sub main {
@@ -34,7 +37,7 @@ sub main {
 	};
 	while (my $line = <STDIN>) {
 		$log .= $line;
-		alarm(1);
+		alarm($window);
 	}
 	process_log();
 }
@@ -42,7 +45,7 @@ sub main {
 
 sub process_log {
 	my @lines = split_lines($log);
-	my @filtered_words = split ",", ($args{'--words'} || '');
+	my @filtered_words = split ",", ($args{'--block'} || '');
 
 	my $today = strftime "%Y-%m-%d", localtime;
 
