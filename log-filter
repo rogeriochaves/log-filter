@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use POSIX qw(strftime);
-use List::Util qw(sum product);
+use List::Util qw(sum product min);
 
 no warnings 'experimental::smartmatch';
 
@@ -27,6 +27,13 @@ Usage: log-filter [args]
 }
 
 my $window = $args{'--window'} || 1;
+my $history = parse_history();
+
+my $hyperparameters = {
+	num_relevant_words => 5,
+	new_word_prob => 0,
+	threshold => 0.5,
+};
 
 
 sub main {
@@ -55,7 +62,8 @@ sub process_log {
 	@lines = grep {
 		my @words = split_words($_);
 		my @matching_words = grep { $_ ~~ @words } @filtered_words;
-		my $included = not scalar @matching_words;
+		$history->{$today}{$_}++ for @words;
+		my $included = (not scalar @matching_words) && bayesian_filter(\@words);
 
 		print $fh "$today:", join(",", @words), "\n";
 
@@ -116,8 +124,8 @@ sub word_posteriors {
 
 	my $posteriors = {};
 	for my $date (keys %$history) {
-		if ($totals->{words}{$word} < 1) {
-			$posteriors->{$date} = 0.1;
+		if ($totals->{words}{$word} < 1 || not exists $history->{$date}{$word} ) { # TODO test second case after ||
+			$posteriors->{$date} = $hyperparameters->{new_word_prob};
 			next;
 		}
 		my $P_foo_given_date = $history->{$date}{$word} / $totals->{dates}{$date};
@@ -157,12 +165,23 @@ sub combined_probability {
 		my $posteriors_for_date = $posteriors->{$date};
 
 		my @relevant_probs = sort {abs($b - 0.5) <=> abs($a - 0.5)} values %{$posteriors_for_date};
-		@relevant_probs = @relevant_probs[0..$n - 1];
+		@relevant_probs = @relevant_probs[0..min($n - 1, scalar @relevant_probs - 1)];
 
 		my $combined_probability = (product @relevant_probs) / ((product @relevant_probs) + (product map { 1 - $_ } @relevant_probs));
 		$combined_probabilities->{$date} = $combined_probability;
 	}
 	return $combined_probabilities;
+}
+
+
+sub bayesian_filter {
+	my ($words) = @_;
+
+	my $posteriors = posteriors($words, $history);
+	my $combined_probabilities = combined_probability($posteriors, $hyperparameters->{num_relevant_words});
+	my $today = strftime "%Y-%m-%d", localtime;
+
+	return $combined_probabilities->{$today} >= $hyperparameters->{threshold};
 }
 
 main() unless caller;
