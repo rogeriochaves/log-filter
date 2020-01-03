@@ -23,7 +23,8 @@ You might need to do a trick to fake tty to have colors, like this:
 Usage: log-filter [args]
   --block      comma separated list of words, any output in less then 1s containing this word will be filtered out
   --window     window time in seconds to group logs, by default it's 1s
-  --retention  days to save logs history, default is 7
+  --retention  days to save logs history, default is 14
+  --days-ago   how many days does it take for you to consider those logs are 'old'? Default is 3. Days where logs were not collected are not counted
   --help       shows this help
 
 "
@@ -32,12 +33,13 @@ Usage: log-filter [args]
 }
 
 my $window = $args{'--window'} || 1;
-my $retention = $args{'--retention'} || 7;
+my $retention = $args{'--retention'} || 14;
+my $days_ago = $args{'--days-ago'} || 3;
 my $history = parse_history();
 
 my $hyperparameters = {
 	num_relevant_words => 10,
-	new_word_prob => 0.5,
+	new_word_prob => 0.1,
 	threshold => 0.5,
 	upper_bound => 0.99,
 	lower_bound => 0.01,
@@ -193,9 +195,12 @@ sub bayesian_filter {
 
 	my $posteriors = posteriors($words, $history);
 	my $combined_probabilities = combined_probability($posteriors, $hyperparameters->{num_relevant_words});
-	my $today = strftime "%Y-%m-%d", localtime;
 
-	return $combined_probabilities->{$today} >= $hyperparameters->{threshold};
+	my @dates = reverse sort keys %$history;
+	for my $date (@dates[0..$days_ago - 1]) {
+		return 1 if $combined_probabilities->{$date} >= $hyperparameters->{threshold};
+	}
+	return 0;
 }
 
 main() unless caller;

@@ -22,7 +22,7 @@ describe "log-filter" => sub {
 	", "
 	word_e word_f
 	",
-			"
+				"
 	word_g
 			"
 			];
@@ -135,8 +135,8 @@ describe "log-filter" => sub {
 		it "calculates probability of unseen word" => sub {
 			my $result = word_posteriors('xpto', $history, calculate_totals(['xpto'], $history));
 			my $expected = {
-				'2020-01-01' => 0.5,
-				'2020-01-02' => 0.5,
+				'2020-01-01' => 0.1,
+				'2020-01-02' => 0.1,
 			};
 			eq_or_diff($result, $expected);
 		};
@@ -144,7 +144,7 @@ describe "log-filter" => sub {
 		it "calculates probability of words not available in all dates, with maximum probability to avoid multiplication by 0 errors" => sub {
 			my $result = word_posteriors('qux', $history, calculate_totals(['qux'], $history));
 			my $expected = {
-				'2020-01-01' => 0.5,
+				'2020-01-01' => 0.1,
 				'2020-01-02' => 0.99,
 			};
 			eq_or_diff($result, $expected);
@@ -204,8 +204,8 @@ describe "log-filter" => sub {
 $three_days_ago:foo,bar,baz
 $three_days_ago:foo,meh
 $two_days_ago:lalalala
-$yesterday:foo,wut
-$today:wut
+$yesterday:foo,wut,lol,lol,lol
+$today:wut,lol
 ";
 			write_file($ENV{"HOME"} . '/.log-filter-history', $history);
 		};
@@ -219,12 +219,17 @@ $today:wut
 			my $result = `echo "foo\n-------\nmeh" | ./log-filter`;
 			eq_or_diff($result, "\nmeh\n");
 		};
+
+		it "keeps logs which which appeared mostly yesterday but is still quite fresh to show it today as well" => sub {
+			my $result = `echo "foo\n-------\nlol" | ./log-filter`;
+			eq_or_diff($result, "\nlol\n");
+		};
 	};
 
-	describe "clears older logs" => sub {
+	it "clears older logs" => sub {
 		my $today = strftime "%Y-%m-%d", localtime;
-		my $eight_days_ago = strftime "%Y-%m-%d", localtime(time() - 24*60*60*8);
-		my $history = "$eight_days_ago:wut
+		my $long_ago = strftime "%Y-%m-%d", localtime(time() - 24*60*60*15);
+		my $history = "$long_ago:wut
 $today:bar
 ";
 		write_file($ENV{"HOME"} . '/.log-filter-history', $history);
