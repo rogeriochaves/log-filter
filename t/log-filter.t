@@ -220,6 +220,20 @@ $today:wut
 			eq_or_diff($result, "\nmeh\n");
 		};
 	};
+
+	describe "clears older logs" => sub {
+		my $today = strftime "%Y-%m-%d", localtime;
+		my $eight_days_ago = strftime "%Y-%m-%d", localtime(time() - 24*60*60*8);
+		my $history = "$eight_days_ago:wut
+$today:bar
+";
+		write_file($ENV{"HOME"} . '/.log-filter-history', $history);
+		`echo "foo" | ./log-filter`;
+
+		my $result = read_file($ENV{"HOME"} . '/.log-filter-history');
+
+		eq_or_diff($result, "$today:bar\n$today:foo\n");
+	};
 };
 
 runtests();

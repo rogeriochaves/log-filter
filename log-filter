@@ -16,10 +16,15 @@ Filters logs from stdin, for example:
 
   tail -f mylog.log | log-filter --block spam,warning,fish
 
+You might need to do a trick to fake tty to have colors, like this:
+
+  0<&- script -qefc \"ls --color=auto\" /dev/null | log-filter
+
 Usage: log-filter [args]
-  --block   comma separated list of words, any output in less then 1s containing this word will be filtered out
-  --window  window time in seconds to group logs, by default it's 1s
-  --help    shows this help
+  --block      comma separated list of words, any output in less then 1s containing this word will be filtered out
+  --window     window time in seconds to group logs, by default it's 1s
+  --retention  days to save logs history, default is 7
+  --help       shows this help
 
 "
 	);
@@ -27,6 +32,7 @@ Usage: log-filter [args]
 }
 
 my $window = $args{'--window'} || 1;
+my $retention = $args{'--retention'} || 7;
 my $history = parse_history();
 
 my $hyperparameters = {
@@ -96,13 +102,17 @@ sub split_words {
 
 sub parse_history {
 	my $history = {};
-	if (open(my $fh, '<:encoding(UTF-8)', $ENV{"HOME"} . '/.log-filter-history')) {
+	if (open(my $fh, '<:encoding(UTF-8)', $ENV{"HOME"} . '/.log-filter-history') && open(my $out, '>', $ENV{"HOME"} . '/.log-filter-history.tmp')) {
 		while (my $row = <$fh>) {
 			chomp $row;
 			my ($date, $wordlist) = split ":", $row;
+			my $retetion_date = strftime "%Y-%m-%d", localtime(time() - 24 * 60 * 60 * $retention);
+			next if $date lt $retetion_date;
 			my @words = split ",", $wordlist;
 			$history->{$date}{$_}++ for @words;
+			print $out "$row\n";
 		}
+		`mv ~/.log-filter-history.tmp ~/.log-filter-history`;
 	}
 	return $history;
 }
