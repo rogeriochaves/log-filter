@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use POSIX qw(strftime);
-use List::Util qw(sum product min max);
+use List::Util qw(sum product min max uniq);
 
 no warnings 'experimental::smartmatch';
 
@@ -114,8 +114,9 @@ sub calculate_totals {
 	my $totals = {};
 	for my $date (keys %$history) {
 		$totals->{dates}{$date} = sum values %{$history->{$date}};
-		$totals->{words}{$_} += $history->{$date}{$_} || 0 for @$words;
+		$totals->{words}{$_} += $history->{$date}{$_} || 0 for uniq @$words; # TODO: test this uniq
 	}
+	$totals->{total} = sum values %{$totals->{dates}};
 
 	return $totals;
 }
@@ -124,8 +125,6 @@ sub calculate_totals {
 sub word_posteriors {
 	my ($word, $history, $totals) = @_;
 
-	my $total_words = sum values %{$totals->{dates}};
-
 	my $posteriors = {};
 	for my $date (keys %$history) {
 		if ($totals->{words}{$word} < 1 || not exists $history->{$date}{$word} ) {
@@ -133,8 +132,8 @@ sub word_posteriors {
 			next;
 		}
 		my $P_date_given_word = $history->{$date}{$word} / $totals->{dates}{$date};
-		my $P_date = $totals->{dates}{$date} / $total_words;
-		my $P_word = $totals->{words}{$word} / $total_words;
+		my $P_date = $totals->{dates}{$date} / $totals->{total};
+		my $P_word = $totals->{words}{$word} / $totals->{total};
 		my $prob = ($P_date_given_word * $P_date) / $P_word;
 
 		$posteriors->{$date} = max($hyperparameters->{lower_bound}, min($hyperparameters->{upper_bound}, $prob));
