@@ -200,6 +200,8 @@ sub bayesian_filter {
 	for my $date (@dates[0..$days_ago - 1]) {
 		return 1 if $combined_probabilities->{$date} >= $hyperparameters->{threshold};
 	}
+
+	print ".";
 	return 0;
 }
 

@@ -212,17 +212,17 @@ $today:wut,lol
 
 		it "filters out logs which have probabily appeared in the past days" => sub {
 			my $result = `echo "foo\n-------\nnew log" | ./log-filter`;
-			eq_or_diff($result, "\nnew log\n");
+			eq_or_diff($result, ".\nnew log\n");
 		};
 
 		it "keeps logs which have maybe appeared on the past days but also today" => sub {
 			my $result = `echo "foo\n-------\nmeh" | ./log-filter`;
-			eq_or_diff($result, "\nmeh\n");
+			eq_or_diff($result, ".\nmeh\n");
 		};
 
 		it "keeps logs which which appeared mostly yesterday but is still quite fresh to show it today as well" => sub {
 			my $result = `echo "foo\n-------\nlol" | ./log-filter`;
-			eq_or_diff($result, "\nlol\n");
+			eq_or_diff($result, ".\nlol\n");
 		};
 	};
 
