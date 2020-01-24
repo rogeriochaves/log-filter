@@ -98,7 +98,10 @@ sub split_lines {
 sub split_words {
 	my $log = shift;
 
-	return grep { $_ } map { $_ =~ s/[^a-z-_\/]//gir } split /\s|::|\//, $log;
+	my $word_divisions = '\s|::|\/';
+	my $color_marker = '\e\[[\d;]+m';
+	my $special_characters = '[^a-z-_\/]';
+	return grep { $_ } map { $_ =~ s/$color_marker|$special_characters//gir } split /$word_divisions/, $log;
 }
 
 

@@ -58,6 +58,15 @@ describe "log-filter" => sub {
 			eq_or_diff($result, $expected);
 		};
 
+		it "removes color markers" => sub {
+			my $sample = "\e[1;33;4;44mhey there\e[0m";
+
+			my $result = [ split_words($sample) ];
+			my $expected = ['hey', 'there'];
+
+			eq_or_diff($result, $expected);
+		};
+
 		it "filters logs with specific words" => sub {
 			my $result = `echo "foo bar\n-------\nbaz\nqux\n-------\nalpha beta" | ./log-filter --block foo,baz`;
 			eq_or_diff($result, "\nalpha beta\n");
@@ -79,10 +88,13 @@ describe "log-filter" => sub {
 		};
 
 		it "parses history counting words" => sub {
-			my $history = "2020-01-01:foo,bar,baz
-2020-01-01:foo,bar
-2020-01-02:foo,baz
-2020-01-02:foo,baz,bar
+			my $today = strftime "%Y-%m-%d", localtime;
+			my $yesterday = strftime "%Y-%m-%d", localtime(time() - 24*60*60);
+
+			my $history = "$yesterday:foo,bar,baz
+$yesterday:foo,bar
+$today:foo,baz
+$today:foo,baz,bar
 ";
 			write_file($ENV{"HOME"} . '/.log-filter-history', $history);
 			my $result = parse_history();
@@ -90,12 +102,12 @@ describe "log-filter" => sub {
 			eq_or_diff(
 				$result,
 				{
-					'2020-01-01' => {
+					$yesterday => {
 						'foo' => 2,
 						'bar' => 2,
 						'baz' => 1,
 					},
-					'2020-01-02' => {
+					$today => {
 						'foo' => 2,
 						'bar' => 1,
 						'baz' => 2,
